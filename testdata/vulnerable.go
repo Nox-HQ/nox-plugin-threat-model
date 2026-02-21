@@ -25,7 +25,7 @@ func fetchData() {
 	_ = resp
 }
 
-// THREAT-003: Repudiation risk — security action without audit logging.
+// THREAT-003: Repudiation risk — security action without audit trail.
 func DeleteUser(userID string) error {
 	// No logging of this security-critical action.
 	return nil

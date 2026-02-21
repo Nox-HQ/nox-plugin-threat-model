@@ -20,7 +20,7 @@ def fetch_remote_data():
     data = json.loads(response.text)
     return data
 
-# THREAT-003: Repudiation risk — security actions without audit logging.
+# THREAT-003: Repudiation risk — security actions without audit trail.
 def delete_user(user_id):
     # No audit log for destructive operation.
     db.users.delete(user_id)

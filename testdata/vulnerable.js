@@ -17,7 +17,7 @@ async function loadConfig() {
   return config;
 }
 
-// THREAT-003: Repudiation risk — security actions without logging.
+// THREAT-003: Repudiation risk — security actions without audit trail.
 async function deleteUser(userId) {
   // No audit log for user deletion.
   await db.users.delete(userId);
