@@ -74,6 +74,24 @@ func TestScanFindsPrivilegeEscalation(t *testing.T) {
 	}
 }
 
+// TestCleanCodeNoTamperingFindings is the FP guard for the narrowed
+// THREAT-002 rule. Everyday data handling — fetch()+JSON.parse, requests.get
+// +json.loads, http.Get+json.Unmarshal, and yaml.load with a safe Loader —
+// must NOT be flagged as a tampering risk. Only genuine unsafe deserializers
+// (pickle, unsafe yaml.load) and dynamic code execution (eval, new Function)
+// should fire.
+func TestCleanCodeNoTamperingFindings(t *testing.T) {
+	client := testClient(t)
+	resp := invokeScan(t, client, filepath.Join(testdataDir(t), "clean"))
+
+	found := findByRule(resp.GetFindings(), "THREAT-002")
+	if len(found) != 0 {
+		for _, f := range found {
+			t.Errorf("unexpected THREAT-002 false positive: %s", f.GetMessage())
+		}
+	}
+}
+
 func TestScanEmptyWorkspace(t *testing.T) {
 	client := testClient(t)
 	resp := invokeScan(t, client, t.TempDir())
