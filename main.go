@@ -25,6 +25,10 @@ type threatRule struct {
 	Message    string
 	Category   string
 	Patterns   map[string][]*regexp.Regexp // extension -> compiled patterns
+	// Mitigations suppress a match on the same line when present — used to
+	// encode "safe" variants RE2 cannot express with negative lookahead
+	// (e.g. yaml.load with an explicit safe Loader=). Keyed by extension.
+	Mitigations map[string][]*regexp.Regexp
 }
 
 // Compiled regex patterns for each rule, grouped by language extension.
@@ -72,28 +76,33 @@ var rules = []threatRule{
 		ID:         "THREAT-002",
 		Severity:   sdk.SeverityMedium,
 		Confidence: sdk.ConfidenceMedium,
-		Message:    "Tampering risk: missing integrity check detected",
+		Message:    "Tampering risk: unsafe deserialization or dynamic code execution of untrusted data",
 		Category:   "tampering",
+		// Narrowed to genuinely dangerous sinks. The previous patterns matched
+		// json.Unmarshal / io.ReadAll / http.Get / requests.get / JSON.parse /
+		// fetch — normal operations in virtually every program — which made this
+		// rule pure noise. Only unsafe deserializers (pickle, PyYAML's unsafe
+		// load) and dynamic code execution (eval) are flagged now.
 		Patterns: map[string][]*regexp.Regexp{
-			".go": {
-				regexp.MustCompile(`(?i)(?:http\.Get|http\.Post|http\.Do)\s*\([^)]*\)\s*$`),
-				regexp.MustCompile(`(?i)io(?:util)?\.ReadAll\s*\(`),
-				regexp.MustCompile(`(?i)json\.(?:Unmarshal|Decode)\s*\(`),
-			},
 			".py": {
-				regexp.MustCompile(`(?i)requests\.(?:get|post|put|delete)\s*\(`),
-				regexp.MustCompile(`(?i)json\.loads?\s*\(`),
 				regexp.MustCompile(`(?i)pickle\.loads?\s*\(`),
+				regexp.MustCompile(`(?i)yaml\.(?:unsafe_load|load)\s*\(`),
+				regexp.MustCompile(`(?i)\beval\s*\(`),
 			},
 			".js": {
-				regexp.MustCompile(`(?i)fetch\s*\(\s*['"]`),
-				regexp.MustCompile(`(?i)JSON\.parse\s*\(`),
-				regexp.MustCompile(`(?i)eval\s*\(`),
+				regexp.MustCompile(`(?i)\beval\s*\(`),
+				regexp.MustCompile(`(?i)new\s+Function\s*\(`),
 			},
 			".ts": {
-				regexp.MustCompile(`(?i)fetch\s*\(\s*['"]`),
-				regexp.MustCompile(`(?i)JSON\.parse\s*\(`),
-				regexp.MustCompile(`(?i)eval\s*\(`),
+				regexp.MustCompile(`(?i)\beval\s*\(`),
+				regexp.MustCompile(`(?i)new\s+Function\s*\(`),
+			},
+		},
+		// yaml.load with an explicit Loader= (SafeLoader/BaseLoader) is safe;
+		// RE2 has no negative lookahead, so suppress those lines here instead.
+		Mitigations: map[string][]*regexp.Regexp{
+			".py": {
+				regexp.MustCompile(`(?i)Loader\s*=`),
 			},
 		},
 	},
@@ -307,6 +316,20 @@ func scanFile(_ context.Context, resp *sdk.ResponseBuilder, filePath, ext string
 			}
 			if !matched {
 				continue
+			}
+
+			// Suppress the match if a mitigation pattern (a known-safe variant)
+			// is present on the same line.
+			if mitigated := false; rule.Mitigations != nil {
+				for _, m := range rule.Mitigations[ext] {
+					if m.MatchString(line) {
+						mitigated = true
+						break
+					}
+				}
+				if mitigated {
+					continue
+				}
 			}
 
 			resp.Finding(

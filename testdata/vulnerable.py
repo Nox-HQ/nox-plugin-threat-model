@@ -1,6 +1,8 @@
 import os
 import subprocess
 import traceback
+import pickle
+import yaml
 import requests
 import json
 
@@ -14,11 +16,16 @@ def check_auth(token):
         return True
     return False
 
-# THREAT-002: Tampering risk — no integrity check.
+# THREAT-002: Tampering risk — unsafe deserialization of untrusted data.
 def fetch_remote_data():
     response = requests.get("https://example.com/api/data")
-    data = json.loads(response.text)
+    # Deserializing remote bytes with pickle executes arbitrary code.
+    data = pickle.loads(response.content)
     return data
+
+def load_settings(raw):
+    # yaml.load without a safe Loader can instantiate arbitrary objects.
+    return yaml.load(raw)
 
 # THREAT-003: Repudiation risk — security actions without audit trail.
 def delete_user(user_id):

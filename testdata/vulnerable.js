@@ -10,11 +10,17 @@ function checkAuth(token) {
   return false;
 }
 
-// THREAT-002: Tampering risk — no integrity verification.
+// THREAT-002: Tampering risk — dynamic code execution of untrusted data.
 async function loadConfig() {
   const data = await fetch("https://example.com/config");
-  const config = JSON.parse(await data.text());
+  // eval() of a remote response body executes attacker-controlled code.
+  const config = eval("(" + (await data.text()) + ")");
   return config;
+}
+
+function compile(expr) {
+  // new Function() is eval-equivalent dynamic code execution.
+  return new Function("ctx", "return " + expr);
 }
 
 // THREAT-003: Repudiation risk — security actions without audit trail.
