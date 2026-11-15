@@ -1,5 +1,7 @@
 # nox-plugin-threat-model
 
+[![nox security grade](.github/nox-badge.svg)](https://github.com/nox-hq/nox)
+
 **STRIDE-based threat pattern detection in source code for automated threat modeling.**
 
 ## Overview
